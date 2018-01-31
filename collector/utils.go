@@ -1,9 +1,75 @@
 package collector
 
 import (
+	"strings"
+	"strconv"
+
 	log "github.com/Sirupsen/logrus"
-	rancher "github.com/rancher/go-rancher/v2"
+	rancher "github.com/rancher/go-rancher/v3"
 )
+
+const catalogProto = "catalog://"
+
+type CpuInfo struct {
+	CoresMin   int `json:"cores_min"`
+	CoresMax   int `json:"cores_max"`
+	CoresTotal int `json:"cores_total"`
+	UtilMin    int `json:"util_min"`
+	UtilAvg    int `json:"util_avg"`
+	UtilMax    int `json:"util_max"`
+}
+
+func (c CpuInfo) Update(total, util int){
+	c.CoresMin = MinButNotZero(c.CoresMin, total)
+	c.CoresMax = Max(c.CoresMin, total)
+	c.CoresTotal += total		
+	c.UtilMin = MinButNotZero(c.UtilMin, util)
+	c.UtilMax = Max(c.UtilMax, util)
+}
+
+func (c CpuInfo) UpdateAvg(i []float64) {
+	c.UtilAvg = Clamp(0, Round(Average(i)), 100)
+}
+
+type MemoryInfo struct {
+	MinMb   int `json:"mb_min"`
+	MaxMb   int `json:"mb_max"`
+	TotalMb int `json:"mb_total"`
+	UtilMin int `json:"util_min"`
+	UtilAvg int `json:"util_avg"`
+	UtilMax int `json:"util_max"`
+}
+
+func (m MemoryInfo) Update(total, util int){
+	m.MinMb = MinButNotZero(m.MinMb, total)
+	m.MaxMb = Max(m.MaxMb, total)
+	m.TotalMb += total
+	m.UtilMin = MinButNotZero(m.UtilMin, util)
+	m.UtilMax = Max(m.UtilMax, util)
+}
+
+func (m MemoryInfo) UpdateAvg(i []float64) {
+	m.UtilAvg = Clamp(0, Round(Average(i)), 100)
+}
+
+func GetRawInt(item, sep string) int {
+	var result int
+
+	if sep != "" {
+		result, _ = strconv.Atoi(strings.Replace(item, sep, "", 1))
+	} else {
+		result, _ = strconv.Atoi(item)
+	}
+	
+	return result
+}
+
+func FromCatalog(s string) bool {
+	if strings.Contains(s, catalogProto) {
+		return true
+	}
+	return false
+}
 
 func Min(x, y int) int {
 	if x < y {

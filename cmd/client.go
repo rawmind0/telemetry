@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/urfave/cli"
 
-	rancher "github.com/rancher/go-rancher/v2"
+	rancher "github.com/rancher/go-rancher/v3"
 	collector "github.com/rancher/telemetry/collector"
 	publish "github.com/rancher/telemetry/publish"
 	record "github.com/rancher/telemetry/record"
@@ -26,7 +26,7 @@ var (
 	target    string
 )
 
-const RECORD_VERSION = 1
+const RECORD_VERSION = 2
 const EXISTING_FILE = ".existing"
 
 func ClientCommand() cli.Command {
