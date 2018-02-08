@@ -26,6 +26,9 @@ import:
 - package: github.com/rancher/norman
   version: master
 
+- package: github.com/rancher/norman/types
+  version: master
+
 - package: github.com/urfave/cli
   version: v1.18.0
 
@@ -45,4 +48,10 @@ import:
   version: master
 
 - package: golang.org/x/net/context
+  version: master
+
+- package: golang.org/x/sys/unix
+  version: master
+
+- package: golang.org/x/crypto/ssh/terminal
   version: master

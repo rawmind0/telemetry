@@ -1,9 +1,9 @@
 package collector
 
 import (
-	log "github.com/sirupsen/logrus"
 	norman "github.com/rancher/norman/types"
 	rancher "github.com/rancher/types/client/project/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type WorkloadInfo struct {

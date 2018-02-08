@@ -1,8 +1,8 @@
 package collector
 
 import (
-	log "github.com/sirupsen/logrus"
 	rancher "github.com/rancher/types/client/management/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type Cluster struct {

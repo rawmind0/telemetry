@@ -1,8 +1,8 @@
 package collector
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

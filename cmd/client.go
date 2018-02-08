@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/gorilla/mux"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 
 	"github.com/rancher/norman/clientbase"
