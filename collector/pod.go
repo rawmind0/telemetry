@@ -1,20 +1,21 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
-	rancher "github.com/rancher/go-rancher/v3"
+	norman "github.com/rancher/norman/types"
+	rancher "github.com/rancher/types/client/project/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type PodInfo struct {
-	PodsMin    int `json:"pods_min"`
-	PodsMax    int `json:"pods_max"`
-	PodsTotal  int `json:"pods_total"`
-	UtilMin    int `json:"util_min"`
-	UtilAvg    int `json:"util_avg"`
-	UtilMax    int `json:"util_max"`
+	PodsMin   int `json:"pods_min"`
+	PodsMax   int `json:"pods_max"`
+	PodsTotal int `json:"pods_total"`
+	UtilMin   int `json:"util_min"`
+	UtilAvg   int `json:"util_avg"`
+	UtilMax   int `json:"util_max"`
 }
 
-func (p PodInfo) Update(total, util int){
+func (p *PodInfo) Update(total, util int) {
 	p.PodsMin = MinButNotZero(p.PodsMin, total)
 	p.PodsMax = Max(p.PodsMax, total)
 	p.PodsTotal += total
@@ -22,50 +23,47 @@ func (p PodInfo) Update(total, util int){
 	p.UtilMax = Max(p.UtilMax, util)
 }
 
-func (p PodInfo) UpdateAvg(i []float64) {
+func (p *PodInfo) UpdateAvg(i []float64) {
 	p.UtilAvg = Clamp(0, Round(Average(i)), 100)
 }
 
-type Pod struct {
-	Containers	[]map[string]interface{}	`json:"containers,omitempty"`
-	Id 			string						`json:"id,omitempty"`
-	Links		map[string]interface{}		`json:"links,omitempty"`
-	Name		string						`json:"name,omitempty"`
-	NamespaceId string 						`json:"namespaceId,omitempty"`
-	NodeId 		string 						`json:"nodeId,omitempty"`
-	ProjectId	string						`json:"projectId,omitempty"`
-	State		string						`json:"state,omitempty"`
-	Uuid		string						`json:"uuid,omitempty"`
-	WorkloadId	string						`json:"workloadId,omitempty"`
+type PodData struct {
+	PodMin   int `json:"min"`
+	PodMax   int `json:"max"`
+	PodTotal int `json:"total"`
+	PodAvg   int `json:"avg"`
 }
 
-type PodCollection struct {
-	rancher.Collection
-	Data   	[]Pod 		`json:"data,omitempty"`
+func (w *PodData) Update(i int) {
+	w.PodTotal += i
+	w.PodMin = MinButNotZero(w.PodMin, i)
+	w.PodMax = Max(w.PodMax, i)
 }
 
+func (w *PodData) UpdateAvg(i []float64) {
+	w.PodAvg = Clamp(0, Round(Average(i)), 100)
+}
 
-func GetPodCollection(c *CollectorOpts, url string) *PodCollection {
+func GetPodCollection(c *CollectorOpts, url string) *rancher.PodCollection {
 	if url == "" {
 		log.Debugf("Pod collection link is empty.")
 		return nil
 	}
 
-	podCollection := &PodCollection{}
+	podCollection := &rancher.PodCollection{}
 	version := "pods"
 
-	resource := rancher.Resource{}
+	resource := norman.Resource{}
 	resource.Links = make(map[string]string)
 	resource.Links[version] = url
 
 	err := c.Client.GetLink(resource, version, podCollection)
-
-	if podCollection == nil || podCollection.Type != "collection" {
-		log.Debugf("Pod collection not found [%s]", resource.Links[version])
-		return nil
-	}
 	if err != nil {
 		log.Debugf("Error getting pod collection [%s] %s", resource.Links[version], err)
+		return nil
+	}
+	if podCollection == nil || podCollection.Type != "collection" || len(podCollection.Data) == 0 {
+		log.Debugf("Pod collection is empty [%s]", resource.Links[version])
 		return nil
 	}
 

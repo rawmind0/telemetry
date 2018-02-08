@@ -1,25 +1,25 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
-	rancher "github.com/rancher/go-rancher/v3"
-	"regexp"
+	rancher "github.com/rancher/types/client/management/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type Machine struct {
-	Active     int        `json:"active"`
-	Total      int        `json:"total"`
-	Cpu        CpuInfo    `json:"cpu"`
-	Mem        MemoryInfo `json:"mem"`
-	Pod        PodInfo 	  `json:"pod"`
-	Kernel     LabelCount `json:"kernel"`
-	Kubelet    LabelCount `json:"kubelet"`
-	Kubeproxy  LabelCount `json:"kubeproxy"`
-	Os         LabelCount `json:"os"`
-	DockerFull LabelCount `json:"docker_full"`
-	Docker     LabelCount `json:"docker"`
-	Driver     LabelCount `json:"driver"`
-	Role       LabelCount `json:"role"`
+	Active    int        `json:"active"`
+	Imported  int        `json:"imported"`
+	FromTmpl  int        `json:"from_template"`
+	Total     int        `json:"total"`
+	Cpu       CpuInfo    `json:"cpu"`
+	Mem       MemoryInfo `json:"mem"`
+	Pod       PodInfo    `json:"pod"`
+	Kernel    LabelCount `json:"kernel"`
+	Kubelet   LabelCount `json:"kubelet"`
+	Kubeproxy LabelCount `json:"kubeproxy"`
+	Os        LabelCount `json:"os"`
+	Docker    LabelCount `json:"docker"`
+	Driver    LabelCount `json:"driver"`
+	Role      LabelCount `json:"role"`
 }
 
 func (m Machine) RecordKey() string {
@@ -43,16 +43,17 @@ func (h Machine) Collect(c *CollectorOpts) interface{} {
 	var podUtils []float64
 
 	h.Kernel = make(LabelCount)
+	h.Kubelet = make(LabelCount)
+	h.Kubeproxy = make(LabelCount)
 	h.Os = make(LabelCount)
 	h.Docker = make(LabelCount)
-	h.DockerFull = make(LabelCount)
 	h.Driver = make(LabelCount)
+	h.Role = make(LabelCount)
 
 	// Machines
 	for _, machine := range machineList.Data {
 		var utilFloat float64
 		var util int
-
 
 		log.Debugf("  Machine: %s", displayMachineName(machine))
 
@@ -60,18 +61,21 @@ func (h Machine) Collect(c *CollectorOpts) interface{} {
 		if machine.State == "active" {
 			h.Active++
 		}
+		if *machine.Imported {
+			h.Imported++
+		}
 
-		allocatable := machine.Allocatable.(map[string]interface{})
+		allocatable := machine.Allocatable
 		if allocatable["cpu"] == "0" || allocatable["memory"] == "0" || allocatable["pods"] == "0" {
 			log.Debugf("  Skipping Machine with no resources: %s", displayMachineName(machine))
 			continue
 		}
 
-		requested := machine.Requested.(map[string]interface{})
+		requested := machine.Requested
 
 		// CPU
 		totalCores := GetRawInt(allocatable["cpu"], "")
-		usedCores := GetRawInt(requested["cpu"],"m")
+		usedCores := GetRawInt(requested["cpu"], "m")
 		utilFloat = float64(usedCores) / float64(totalCores*10)
 		util = Round(utilFloat)
 
@@ -80,8 +84,8 @@ func (h Machine) Collect(c *CollectorOpts) interface{} {
 		log.Debugf("    CPU cores=%d, util=%d", totalCores, util)
 
 		// Memory
-		totalMemMb := GetRawInt(allocatable["memory"], "Ki")/1024
-		usedMemMB := GetRawInt(requested["memory"], "")/1024/1024
+		totalMemMb := GetMemMb(allocatable["memory"])
+		usedMemMB := GetMemMb(requested["memory"])
 		utilFloat = 100 * float64(usedMemMB) / float64(totalMemMb)
 		util = Round(utilFloat)
 
@@ -96,41 +100,31 @@ func (h Machine) Collect(c *CollectorOpts) interface{} {
 		util = Round(utilFloat)
 
 		h.Pod.Update(totalPods, util)
+		podUtils = append(podUtils, utilFloat)
 		log.Debugf("    Pod used=%d, total=%d, util=%d", usedPods, totalPods, util)
 
 		// OS
-		info, ok := machine.Info.(map[string]interface{})
-		if !ok {
-			log.Debugf("  Skipping Machine with no Info: %s", displayMachineName(machine))
-			continue
-		}
+		osInfo := machine.Info.OS
+		h.Kernel.Increment(osInfo.KernelVersion)
+		h.Os.Increment(osInfo.OperatingSystem)
+		h.Docker.Increment(osInfo.DockerVersion)
 
-		osInfo := info["os"].(map[string]interface{})
-		h.Kernel.Increment(osInfo["kernelVersion"].(string))
-		h.Os.Increment(osInfo["operatingSystem"].(string))
-
-		dockerFull := osInfo["dockerVersion"].(string)
-		docker := regexp.MustCompile("(?i)^docker version (.*)").ReplaceAllString(dockerFull, "v$1")
-		docker = regexp.MustCompile("(?i)^(.*), build [0-9a-f]+$").ReplaceAllString(docker, "$1")
-		h.DockerFull.Increment(dockerFull)
-		h.Docker.Increment(docker)
-
-		kubeInfo := info["kubernetes"].(map[string]interface{})
-		h.Kubelet.Increment(osInfo["kubeletVersion"].(string))
-		h.Kubeproxy.Increment(osInfo["kubeProxyVersion"].(string))
+		// K8s
+		kubeInfo := machine.Info.Kubernetes
+		h.Kubelet.Increment(kubeInfo.KubeletVersion)
+		h.Kubeproxy.Increment(kubeInfo.KubeProxyVersion)
 
 		// Role
 		for _, role := range machine.Role {
-			h.Driver.Increment(role)
+			h.Role.Increment(role)
 		}
 
 		// Driver
-		machineTemplate, err := c.Client.MachineTemplate.ById(info["machineTemplateId"])
-		if err != nil {
-			log.Debugf("  Skipping Machine Template with no Driver Info: %s", info["machineTemplateId"])
-			continue
+		machineTemplate := GetMachineTemplate(c.Client, machine.MachineTemplateId)
+		if machineTemplate != nil {
+			h.FromTmpl++
+			h.Driver.Increment(machineTemplate.Driver)
 		}
-		h.Driver.Increment(machineTemplate.Driver)
 	}
 
 	h.Cpu.UpdateAvg(cpuUtils)
@@ -150,6 +144,6 @@ func displayMachineName(m rancher.Machine) string {
 	} else if len(m.Hostname) > 0 {
 		return m.Hostname
 	} else {
-		return "(" + m.Id + ")"
+		return "(" + m.Uuid + ")"
 	}
 }

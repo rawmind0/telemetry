@@ -1,73 +1,61 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
-	rancher "github.com/rancher/go-rancher/v3"
+	norman "github.com/rancher/norman/types"
+	rancher "github.com/rancher/types/client/cluster/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type NsInfo struct {
-	NsMin	   	int `json:"ns_min"`
-	NsMax      	int `json:"ns_max"`
-	NsTotal    	int `json:"ns_total"`
-	NsAvg      	int `json:"ns_avg"`
+	NsMin       int `json:"min"`
+	NsMax       int `json:"max"`
+	NsTotal     int `json:"total"`
+	NsAvg       int `json:"avg"`
 	FromCatalog int `json:"from_catalog"`
+	NoProject   int `json:"no_project,omitempty"`
 }
 
-func (n NsInfo) Update(i int){
+func (n *NsInfo) Update(i int) {
 	n.NsTotal += i
 	n.NsMin = MinButNotZero(n.NsMin, i)
 	n.NsMax = Max(n.NsMax, i)
 }
 
-func (n NsInfo) UpdateAvg(i []float64) {
+func (n *NsInfo) UpdateAvg(i []float64) {
 	n.NsAvg = Clamp(0, Round(Average(i)), 100)
 }
 
-func (n NsInfo) UpdateFromCatalog(nsc *NamespaceCollection) {
+func (n *NsInfo) UpdateDetails(nsc *rancher.NamespaceCollection) {
 	for _, ns := range nsc.Data {
-		if FromCatalog(ns.ExternalId) {
+		if FromCatalog(ns.ExternalID) {
 			n.FromCatalog++
+		}
+		if ns.ProjectID == "" {
+			n.NoProject++
 		}
 	}
 }
 
-type Namespace struct {
-	Annotations	map[string]interface{}	`json:"annotations,omitempty"`
-	ExternalId	string					`json:"externalId,omitempty"`
-	Id 			string					`json:"id,omitempty"`
-	Links		map[string]interface{}	`json:"links,omitempty"`
-	Name		string					`json:"name,omitempty"`
-	ProjectId	string					`json:"projectId,omitempty"`
-	State		string					`json:"state,omitempty"`
-	Uuid		string					`json:"state,omitempty"`
-}
-
-type NamespaceCollection struct {
-	rancher.Collection
-	Data   		[]Namespace 		`json:"data,omitempty"`
-}
-
-func GetNamespaceCollection(c *CollectorOpts, url string) *NamespaceCollection {
+func GetNamespaceCollection(c *CollectorOpts, url string) *rancher.NamespaceCollection {
 	if url == "" {
 		log.Debugf("Namespace collection link is empty.")
 		return nil
 	}
 
-	nsCollection := &NamespaceCollection{}
+	nsCollection := &rancher.NamespaceCollection{}
 	version := "namespaces"
 
-	resource := rancher.Resource{}
+	resource := norman.Resource{}
 	resource.Links = make(map[string]string)
 	resource.Links[version] = url
 
 	err := c.Client.GetLink(resource, version, nsCollection)
-
-	if nsCollection == nil || nsCollection.Type != "collection" {
-		log.Debugf("Namespace collection not found [%s]", resource.Links[version])
-		return nil
-	}
 	if err != nil {
 		log.Debugf("Error getting namespace collection [%s] %s", resource.Links[version], err)
+		return nil
+	}
+	if nsCollection == nil || nsCollection.Type != "collection" || len(nsCollection.Data) == 0 {
+		log.Debugf("Namespace collection is empty [%s]", resource.Links[version])
 		return nil
 	}
 
