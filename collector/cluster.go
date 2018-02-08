@@ -2,17 +2,17 @@ package collector
 
 import (
 	log "github.com/Sirupsen/logrus"
-	rancher "github.com/rancher/go-rancher/v3"
+	rancher "github.com/rancher/types/client/management/v3"
 )
 
 type Cluster struct {
-	Active     int        `json:"active"`
-	Total      int        `json:"total"`
-	Ns	   	   NsInfo 	  `json:"ns"`
-	Cpu        CpuInfo    `json:"cpu"`
-	Mem        MemoryInfo `json:"mem"`
-	Pod        PodInfo 	  `json:"pod"`
-	Driver     LabelCount `json:"driver"`
+	Active int         `json:"active"`
+	Total  int         `json:"total"`
+	Ns     *NsInfo     `json:"namespace"`
+	Cpu    *CpuInfo    `json:"cpu"`
+	Mem    *MemoryInfo `json:"mem"`
+	Pod    *PodInfo    `json:"pod"`
+	Driver LabelCount  `json:"driver"`
 }
 
 func (h Cluster) RecordKey() string {
@@ -31,10 +31,16 @@ func (h Cluster) Collect(c *CollectorOpts) interface{} {
 
 	log.Debugf("  Found %d Clusters", len(clusterList.Data))
 
+	h.Ns = &NsInfo{}
+	h.Cpu = &CpuInfo{}
+	h.Mem = &MemoryInfo{}
+	h.Pod = &PodInfo{}
+	h.Driver = make(LabelCount)
+
 	var cpuUtils []float64
 	var memUtils []float64
 	var podUtils []float64
-	var nsUtils  []float64
+	var nsUtils []float64
 
 	// Clusters
 	for _, cluster := range clusterList.Data {
@@ -48,17 +54,17 @@ func (h Cluster) Collect(c *CollectorOpts) interface{} {
 			h.Active++
 		}
 
-		allocatable := cluster.Allocatable.(map[string]interface{})
+		allocatable := cluster.Allocatable
 		if allocatable["cpu"] == "0" || allocatable["memory"] == "0" || allocatable["pods"] == "0" {
 			log.Debugf("  Skipping Cluster with no resources: %s", displayClusterName(cluster))
 			continue
 		}
 
-		requested := cluster.Requested.(map[string]interface{})
+		requested := cluster.Requested
 
 		// CPU
 		totalCores := GetRawInt(allocatable["cpu"], "")
-		usedCores := GetRawInt(requested["cpu"],"m")
+		usedCores := GetRawInt(requested["cpu"], "m")
 		utilFloat = float64(usedCores) / float64(totalCores*10)
 		util = Round(utilFloat)
 
@@ -67,8 +73,8 @@ func (h Cluster) Collect(c *CollectorOpts) interface{} {
 		log.Debugf("    CPU cores=%d, util=%d", totalCores, util)
 
 		// Memory
-		totalMemMb := GetRawInt(allocatable["memory"], "Ki")/1024
-		usedMemMB := GetRawInt(requested["memory"], "")/1024/1024
+		totalMemMb := GetMemMb(allocatable["memory"])
+		usedMemMB := GetMemMb(requested["memory"])
 		utilFloat = 100 * float64(usedMemMB) / float64(totalMemMb)
 		util = Round(utilFloat)
 
@@ -91,13 +97,12 @@ func (h Cluster) Collect(c *CollectorOpts) interface{} {
 
 		// Namespace
 		nsCollection := GetNamespaceCollection(c, cluster.Links["namespaces"])
-		if nsCollection == nil {
-			continue
+		if nsCollection != nil {
+			totalNs := len(nsCollection.Data)
+			h.Ns.Update(totalNs)
+			nsUtils = append(nsUtils, float64(totalNs))
+			h.Ns.UpdateDetails(nsCollection)
 		}
-		totalNs := len(nsCollection.Data)
-		h.Ns.Update(totalNs)
-		nsUtils = append(nsUtils, float64(totalNs))
-		h.Ns.UpdateFromCatalog(nsCollection)
 	}
 
 	h.Cpu.UpdateAvg(cpuUtils)

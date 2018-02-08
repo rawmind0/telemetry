@@ -14,8 +14,17 @@ import:
 - package: github.com/satori/go.uuid
   version: v1.1.0
 
-- package: github.com/rancher/go-rancher
-  version: af955cd2925739b199df4077fafaddfaa4834a2f
+- package: github.com/rancher/types
+  version: master
+
+#- package: github.com/rawmind0/types/client/cluster/v3
+#  version: master
+
+#- package: github.com/rawmind0/types/client/project/v3
+#  version: master
+
+- package: github.com/rancher/norman
+  version: master
 
 - package: github.com/urfave/cli
   version: v1.18.0
