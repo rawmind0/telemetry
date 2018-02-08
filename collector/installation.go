@@ -70,7 +70,8 @@ func (i Installation) GetUid(uid string, c *CollectorOpts) (string, bool) {
 		return uid, true
 	}
 
-	uid = uuid.NewV4().String()
+	newuid, _ := uuid.NewV4()
+	uid = newuid.String()
 	err := SetSetting(c.Client, UID_SETTING, uid)
 	if err != nil {
 		log.Debugf("  Error Generating Uid: %s", err)

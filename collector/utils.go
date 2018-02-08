@@ -132,7 +132,7 @@ func GetRawInt(item, sep string) int {
 		toConv = strings.Replace(item, sep, "", 1)
 	}
 
-	result, err := strconv.Atoi(item)
+	result, err := strconv.Atoi(toConv)
 	if err != nil {
 		log.Debugf("Error converting string to int [%s] %s", toConv, err)
 	}
