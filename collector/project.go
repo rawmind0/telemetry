@@ -1,7 +1,7 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const orchestrationName = "cattle-V2.0"

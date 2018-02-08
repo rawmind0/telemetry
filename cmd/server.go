@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	auth "github.com/abbot/go-http-auth"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"

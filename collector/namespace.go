@@ -1,7 +1,7 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	norman "github.com/rancher/norman/types"
 	rancher "github.com/rancher/types/client/cluster/v3"
 )

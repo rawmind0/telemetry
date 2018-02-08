@@ -1,7 +1,7 @@
 package collector
 
 import (
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	rancher "github.com/rancher/types/client/management/v3"
 )
 
